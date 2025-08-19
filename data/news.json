@@ -1,0 +1,37 @@
+{
+  "news": [
+    {
+      "title": "asdf",
+      "description": "",
+      "image": "/public/placeholder.svg",
+      "category": "",
+      "date": "",
+      "featured": "",
+      "author": "",
+      "readTime": "",
+      "id": "c1df2bea-c1b4-4a85-acd3-a757ec3a7141"
+    }
+  ],
+  "categories": [
+    {
+      "id": "General",
+      "name": "General",
+      "color": "#6b7280"
+    },
+    {
+      "id": "Actualidad",
+      "name": "Actualidad",
+      "color": "#3b82f6"
+    },
+    {
+      "id": "Eventos",
+      "name": "Eventos",
+      "color": "#22c55e"
+    },
+    {
+      "id": "fdsfds",
+      "name": "fdsfds",
+      "color": "#31ac2f"
+    }
+  ]
+}

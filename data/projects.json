@@ -1,0 +1,93 @@
+{
+  "projects": [
+    {
+      "id": "5ca96075-53fb-4124-9339-ff540e4a5cd5",
+      "imagenPrincipal": "/images/5ca96075-53fb-4124-9339-ff540e4a5cd5/imagenPrincipal.jpg",
+      "image1": "/images/5ca96075-53fb-4124-9339-ff540e4a5cd5/image1.jpg",
+      "image2": "/images/5ca96075-53fb-4124-9339-ff540e4a5cd5/image2.jpg",
+      "title": "asdfsadf",
+      "tipo": "",
+      "tema": "",
+      "entidadContratante": "",
+      "paisOrigen": "",
+      "tipo2": "",
+      "objeto": "",
+      "fechaInicial": "",
+      "fechaFinal": "",
+      "consorcio": "",
+      "integrantes": "",
+      "descripcion": "",
+      "category": ""
+    },
+    {
+      "id": "362174a1-1dc3-40ee-8f35-42cc18400e83",
+      "imagenPrincipal": "/images/362174a1-1dc3-40ee-8f35-42cc18400e83/imagenPrincipal.jpg",
+      "image1": "/public/placeholder.svg",
+      "image2": "/public/placeholder.svg",
+      "title": "asdfasdfsafasdfasd",
+      "tipo": "",
+      "tema": "",
+      "entidadContratante": "",
+      "paisOrigen": "",
+      "tipo2": "",
+      "objeto": "",
+      "fechaInicial": "",
+      "fechaFinal": "",
+      "consorcio": "",
+      "integrantes": "",
+      "descripcion": "",
+      "category": ""
+    },
+    {
+      "id": "2c4dd187-260c-4bcf-b19d-4b6ba9a7ca09",
+      "imagenPrincipal": "/public/placeholder.svg",
+      "image1": "/public/placeholder.svg",
+      "image2": "/public/placeholder.svg",
+      "title": "a",
+      "tipo": "",
+      "tema": "",
+      "entidadContratante": "",
+      "paisOrigen": "",
+      "tipo2": "",
+      "objeto": "",
+      "fechaInicial": "",
+      "fechaFinal": "",
+      "consorcio": "",
+      "integrantes": "",
+      "descripcion": "",
+      "category": ""
+    }
+  ],
+  "categories": [
+    {
+      "id": "Aguas",
+      "name": "Aguas",
+      "color": "#c09191"
+    },
+    {
+      "id": "Vías",
+      "name": "Vías",
+      "color": "#22c55e"
+    },
+    {
+      "id": "Edificación",
+      "name": "Edificación",
+      "color": "#a855f7"
+    },
+    {
+      "id": "Señalización",
+      "name": "Señalización",
+      "color": "#eab308"
+    },
+    {
+      "id": "asdf",
+      "name": "asdf",
+      "color": "#ca3f3f"
+    },
+    {
+      "id": "fcdtrdygvytf",
+      "name": "fcdtrdygvytf",
+      "color": "#0741ed"
+    }
+  ]
+}
