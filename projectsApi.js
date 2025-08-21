@@ -111,26 +111,32 @@ router.post('/', upload.fields([
   { name: 'image1', maxCount: 1 },
   { name: 'image2', maxCount: 1 }
 ]), async (req, res) => {
-  // defaultImage ya está definido arriba
+  console.log('POST /projects - body:', req.body);
   const fields = [
     "title", "tipo", "tema", "entidadContratante", "paisOrigen", "tipo2", "objeto", "fechaInicial", "fechaFinal", "consorcio", "integrantes", "descripcion", "category", "imagenPrincipal", "image1", "image2"
   ];
   const newProject = {};
   newProject.id = uuidv4();
-  // Validar título no vacío
   if (!req.body.title || req.body.title.trim() === "") {
+    console.log('POST /projects - error: título vacío');
     return res.status(400).json({ error: 'El título no puede estar vacío.' });
   }
-  // Guardar imágenes si se envían
   const dir = path.join(imagesDir, newProject.id);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   for (const imgKey of ["imagenPrincipal", "image1", "image2"]) {
     if (req.files && req.files[imgKey]) {
       const imgFile = path.join(dir, `${imgKey}.jpg`);
-      await sharp(req.files[imgKey][0].buffer).jpeg({ quality: 90 }).toFile(imgFile);
-      newProject[imgKey] = `/images/${newProject.id}/${imgKey}.jpg`;
+      try {
+        await sharp(req.files[imgKey][0].buffer).jpeg({ quality: 90 }).toFile(imgFile);
+        newProject[imgKey] = `/images/${newProject.id}/${imgKey}.jpg`;
+        console.log(`POST /projects - imagen guardada: ${imgFile}`);
+      } catch (e) {
+        console.log(`POST /projects - error guardando imagen ${imgKey}:`, e);
+        newProject[imgKey] = defaultImage;
+      }
     } else {
       newProject[imgKey] = defaultImage;
+      console.log(`POST /projects - no se envió imagen para ${imgKey}`);
     }
   }
   fields.forEach(key => {
@@ -139,14 +145,22 @@ router.post('/', upload.fields([
     }
   });
   fs.readFile(projectsPath, 'utf8', (err, data) => {
-    if (err) return res.status(500).json({ error: 'Error reading projects.json' });
+    if (err) {
+      console.log('POST /projects - error leyendo projects.json:', err);
+      return res.status(500).json({ error: 'Error reading projects.json' });
+    }
     const json = JSON.parse(data);
     if (validateUniqueTitle(json.projects, newProject.title)) {
+      console.log('POST /projects - error: título duplicado');
       return res.status(400).json({ error: 'Ya existe un proyecto con ese título.' });
     }
     json.projects.push(newProject);
     fs.writeFile(projectsPath, JSON.stringify(json, null, 2), err => {
-      if (err) return res.status(500).json({ error: 'Error writing projects.json' });
+      if (err) {
+        console.log('POST /projects - error escribiendo projects.json:', err);
+        return res.status(500).json({ error: 'Error writing projects.json' });
+      }
+      console.log('POST /projects - proyecto creado:', newProject);
       res.json(newProject);
     });
   });
@@ -158,25 +172,31 @@ router.put('/:id', upload.fields([
   { name: 'image2', maxCount: 1 }
 ]), async (req, res) => {
   const id = req.params.id;
-  // defaultImage ya está definido arriba
+  console.log(`PUT /projects/${id} - body:`, req.body);
   const fields = [
     "title", "tipo", "tema", "entidadContratante", "paisOrigen", "tipo2", "objeto", "fechaInicial", "fechaFinal", "consorcio", "integrantes", "descripcion", "category", "imagenPrincipal", "image1", "image2"
   ];
   const updatedProject = { id };
-  // Validar título no vacío
   if (!req.body.title || req.body.title.trim() === "") {
+    console.log(`PUT /projects/${id} - error: título vacío`);
     return res.status(400).json({ error: 'El título no puede estar vacío.' });
   }
-  // Guardar imágenes si se envían
   const dir = path.join(imagesDir, id);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   for (const imgKey of ["imagenPrincipal", "image1", "image2"]) {
     if (req.files && req.files[imgKey]) {
       const imgFile = path.join(dir, `${imgKey}.jpg`);
-      await sharp(req.files[imgKey][0].buffer).jpeg({ quality: 90 }).toFile(imgFile);
-      updatedProject[imgKey] = `/images/${id}/${imgKey}.jpg`;
+      try {
+        await sharp(req.files[imgKey][0].buffer).jpeg({ quality: 90 }).toFile(imgFile);
+        updatedProject[imgKey] = `/images/${id}/${imgKey}.jpg`;
+        console.log(`PUT /projects/${id} - imagen guardada: ${imgFile}`);
+      } catch (e) {
+        console.log(`PUT /projects/${id} - error guardando imagen ${imgKey}:`, e);
+        updatedProject[imgKey] = req.body[imgKey] || defaultImage;
+      }
     } else {
       updatedProject[imgKey] = req.body[imgKey] || defaultImage;
+      console.log(`PUT /projects/${id} - no se envió imagen para ${imgKey}`);
     }
   }
   fields.forEach(key => {
@@ -185,16 +205,27 @@ router.put('/:id', upload.fields([
     }
   });
   fs.readFile(projectsPath, 'utf8', (err, data) => {
-    if (err) return res.status(500).json({ error: 'Error reading projects.json' });
+    if (err) {
+      console.log(`PUT /projects/${id} - error leyendo projects.json:`, err);
+      return res.status(500).json({ error: 'Error reading projects.json' });
+    }
     const json = JSON.parse(data);
     if (validateUniqueTitle(json.projects, updatedProject.title, id)) {
+      console.log(`PUT /projects/${id} - error: título duplicado`);
       return res.status(400).json({ error: 'Ya existe un proyecto con ese título.' });
     }
     const idx = json.projects.findIndex(p => p.id === id);
-    if (idx === -1) return res.status(404).json({ error: 'Project not found' });
+    if (idx === -1) {
+      console.log(`PUT /projects/${id} - error: proyecto no encontrado`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
     json.projects[idx] = updatedProject;
     fs.writeFile(projectsPath, JSON.stringify(json, null, 2), err => {
-      if (err) return res.status(500).json({ error: 'Error writing projects.json' });
+      if (err) {
+        console.log(`PUT /projects/${id} - error escribiendo projects.json:`, err);
+        return res.status(500).json({ error: 'Error writing projects.json' });
+      }
+      console.log(`PUT /projects/${id} - proyecto actualizado:`, updatedProject);
       res.json(updatedProject);
     });
   });
@@ -203,28 +234,42 @@ router.put('/:id', upload.fields([
 
 router.delete('/:id', (req, res) => {
   const id = req.params.id;
+  console.log(`DELETE /projects/${id}`);
   fs.readFile(projectsPath, 'utf8', (err, data) => {
-    if (err) return res.status(500).json({ error: 'Error reading projects.json' });
+    if (err) {
+      console.log(`DELETE /projects/${id} - error leyendo projects.json:`, err);
+      return res.status(500).json({ error: 'Error reading projects.json' });
+    }
     const json = JSON.parse(data);
     const idx = json.projects.findIndex(p => p.id === id);
-    if (idx === -1) return res.status(404).json({ error: 'Project not found' });
+    if (idx === -1) {
+      console.log(`DELETE /projects/${id} - error: proyecto no encontrado`);
+      return res.status(404).json({ error: 'Project not found' });
+    }
     const deleted = json.projects.splice(idx, 1);
     fs.writeFile(projectsPath, JSON.stringify(json, null, 2), err => {
-      if (err) return res.status(500).json({ error: 'Error writing projects.json' });
-      // Eliminar carpeta de imágenes del proyecto borrado
+      if (err) {
+        console.log(`DELETE /projects/${id} - error escribiendo projects.json:`, err);
+        return res.status(500).json({ error: 'Error writing projects.json' });
+      }
       const dir = path.join(imagesDir, id);
       if (fs.existsSync(dir)) {
-        fs.rmSync(dir, { recursive: true, force: true });
+        try {
+          fs.rmSync(dir, { recursive: true, force: true });
+          console.log(`DELETE /projects/${id} - carpeta de imágenes eliminada: ${dir}`);
+        } catch (e) {
+          console.log(`DELETE /projects/${id} - error eliminando carpeta de imágenes:`, e);
+        }
       }
-      // Repasar todas las carpetas y borrar las que no tengan id en projects.json ni en news.json
-      // newsPath ya está definido arriba
       fs.readFile(newsPath, 'utf8', (err2, data2) => {
         let validNewsIds = [];
         if (!err2) {
           try {
             const newsJson = JSON.parse(data2);
             validNewsIds = Array.isArray(newsJson.news) ? newsJson.news.map(n => n.id) : [];
-          } catch {}
+          } catch (e) {
+            console.log(`DELETE /projects/${id} - error parseando news.json:`, e);
+          }
         }
         fs.readdir(imagesDir, (err, folders) => {
           if (!err && Array.isArray(folders)) {
@@ -233,10 +278,16 @@ router.delete('/:id', (req, res) => {
             folders.forEach(folder => {
               const folderPath = path.join(imagesDir, folder);
               if (!validIds.includes(folder) && fs.lstatSync(folderPath).isDirectory()) {
-                fs.rmSync(folderPath, { recursive: true, force: true });
+                try {
+                  fs.rmSync(folderPath, { recursive: true, force: true });
+                  console.log(`DELETE /projects/${id} - carpeta huérfana eliminada: ${folderPath}`);
+                } catch (e) {
+                  console.log(`DELETE /projects/${id} - error eliminando carpeta huérfana:`, e);
+                }
               }
             });
           }
+          console.log(`DELETE /projects/${id} - proyecto eliminado:`, deleted[0]);
           res.json(deleted[0]);
         });
       });
