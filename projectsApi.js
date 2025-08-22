@@ -127,7 +127,13 @@ router.post('/', upload.fields([
       console.log('POST /projects - error leyendo projects.json:', err);
       return res.status(500).json({ error: 'Error leyendo projects.json' });
     }
-    const json = JSON.parse(data);
+    let json;
+    try {
+      json = JSON.parse(data);
+    } catch (e) {
+      console.log('POST /projects - error parseando projects.json:', e);
+      return res.status(500).json({ error: 'Error parseando projects.json, archivo corrupto.' });
+    }
     if (validateUniqueTitle(json.projects, req.body.title)) {
       console.log('POST /projects - error: título duplicado');
       return res.status(400).json({ error: 'Ya existe un proyecto con ese título.' });
@@ -155,7 +161,20 @@ router.post('/', upload.fields([
     }
     fields.forEach(key => {
       if (!["imagenPrincipal", "image1", "image2", "id"].includes(key)) {
-        newProject[key] = req.body[key] ?? "";
+        // Validación y normalización de fechas
+        if (key === "fechaInicial" || key === "fechaFinal") {
+          let val = req.body[key] ?? "";
+          // Solo acepta fechas válidas tipo YYYY-MM-DD
+          if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+            const d = new Date(val);
+            val = !isNaN(d.getTime()) ? d.toISOString().slice(0,10) : "";
+          } else {
+            val = "";
+          }
+          newProject[key] = val;
+        } else {
+          newProject[key] = req.body[key] ?? "";
+        }
       }
     });
     json.projects.push(newProject);
@@ -163,31 +182,6 @@ router.post('/', upload.fields([
       if (err) {
         console.log('POST /projects - error escribiendo projects.json:', err);
         return res.status(500).json({ error: 'Error escribiendo projects.json' });
-      }
-      console.log('POST /projects - proyecto creado:', newProject);
-      res.json(newProject);
-    });
-  });
-  fields.forEach(key => {
-    if (!["imagenPrincipal", "image1", "image2", "id"].includes(key)) {
-      newProject[key] = req.body[key] ?? "";
-    }
-  });
-  fs.readFile(projectsPath, 'utf8', (err, data) => {
-    if (err) {
-      console.log('POST /projects - error leyendo projects.json:', err);
-      return res.status(500).json({ error: 'Error reading projects.json' });
-    }
-    const json = JSON.parse(data);
-    if (validateUniqueTitle(json.projects, newProject.title)) {
-      console.log('POST /projects - error: título duplicado');
-      return res.status(400).json({ error: 'Ya existe un proyecto con ese título.' });
-    }
-    json.projects.push(newProject);
-    fs.writeFile(projectsPath, JSON.stringify(json, null, 2), err => {
-      if (err) {
-        console.log('POST /projects - error escribiendo projects.json:', err);
-        return res.status(500).json({ error: 'Error writing projects.json' });
       }
       console.log('POST /projects - proyecto creado:', newProject);
       res.json(newProject);

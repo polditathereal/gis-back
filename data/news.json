@@ -36,7 +36,7 @@
     {
       "title": "afdsgadfgdf",
       "description": "gsdfgsdfg",
-      "date": "sdfgsdfg",
+      "date": "",
       "featured": "sdfgsdfg",
       "author": "sdfgsdf",
       "readTime": "gsdfgsdfg",
@@ -51,6 +51,17 @@
       "description": "",
       "category": "",
       "date": "",
+      "featured": "",
+      "author": "",
+      "readTime": ""
+    },
+    {
+      "date": "1234-03-12",
+      "title": "qwerqwerqwerqwerwerqwer",
+      "id": "c990b605-2f16-4716-8cd8-f8090cd1fafd",
+      "image": "/public/placeholder.svg",
+      "description": "",
+      "category": "",
       "featured": "",
       "author": "",
       "readTime": ""
