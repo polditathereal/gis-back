@@ -150,19 +150,7 @@ router.post('/', upload.single('image'), async (req, res) => {
   newNews.id = uuidv4();
   let imagePath = defaultImage;
   try {
-    if (req.file) {
-      const dir = path.join(imagesDir, newNews.id);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      const imgFile = path.join(dir, 'image.jpg');
-      await sharp(req.file.buffer).jpeg({ quality: 90 }).toFile(imgFile);
-      imagePath = `/images/${newNews.id}/image.jpg`;
-      console.log('POST /news - imagen guardada:', imgFile);
-    }
-    newNews.image = imagePath;
-    fields.forEach(key => {
-      newNews[key] = req.body[key] ?? "";
-    });
-    fs.readFile(newsPath, 'utf8', (err, data) => {
+    fs.readFile(newsPath, 'utf8', async (err, data) => {
       if (err) {
         console.log('POST /news - error leyendo news.json:', err);
         return res.status(500).json({ error: 'Error leyendo news.json', status: 500 });
@@ -172,6 +160,22 @@ router.post('/', upload.single('image'), async (req, res) => {
         console.log('POST /news - error: título duplicado');
         return res.status(400).json({ error: 'Ya existe una noticia con ese título.', status: 400 });
       }
+      // Solo crear carpeta y guardar imagen si el título es único
+      if (req.file) {
+        const dir = path.join(imagesDir, newNews.id);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        const imgFile = path.join(dir, 'image.jpg');
+        await sharp(req.file.buffer)
+          .rotate() // Corrige la orientación según EXIF
+          .jpeg({ quality: 90 })
+          .toFile(imgFile);
+        imagePath = `/images/${newNews.id}/image.jpg`;
+        console.log('POST /news - imagen guardada:', imgFile);
+      }
+      newNews.image = imagePath;
+      fields.forEach(key => {
+        newNews[key] = req.body[key] ?? "";
+      });
       json.news.push(newNews);
       fs.writeFile(newsPath, JSON.stringify(json, null, 2), err => {
         if (err) {
@@ -205,7 +209,14 @@ router.put('/:id', upload.single('image'), async (req, res) => {
       const dir = path.join(imagesDir, id);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       const imgFile = path.join(dir, 'image.jpg');
-      await sharp(req.file.buffer).jpeg({ quality: 90 }).toFile(imgFile);
+      // Elimina la imagen anterior si existe
+      if (fs.existsSync(imgFile)) {
+        fs.unlinkSync(imgFile);
+      }
+      await sharp(req.file.buffer)
+        .rotate() // Corrige la orientación según EXIF
+        .jpeg({ quality: 90 })
+        .toFile(imgFile);
       imagePath = `/images/${id}/image.jpg`;
       console.log(`PUT /news/${id} - imagen guardada:`, imgFile);
     } else {

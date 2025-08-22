@@ -10,6 +10,50 @@
       "author": "",
       "readTime": "",
       "id": "c1df2bea-c1b4-4a85-acd3-a757ec3a7141"
+    },
+    {
+      "title": "fasdfasdf",
+      "category": "Actualidad",
+      "id": "2bd914e3-edf4-45b6-9049-8a8ccd8fabd7",
+      "image": "/public/placeholder.svg",
+      "description": "",
+      "date": "",
+      "featured": "",
+      "author": "",
+      "readTime": ""
+    },
+    {
+      "title": "asdfasdf",
+      "id": "35538e31-d813-4221-8483-bea270073a69",
+      "image": "/images/35538e31-d813-4221-8483-bea270073a69/image.jpg",
+      "description": "",
+      "category": "",
+      "date": "",
+      "featured": "",
+      "author": "",
+      "readTime": ""
+    },
+    {
+      "title": "afdsgadfgdf",
+      "description": "gsdfgsdfg",
+      "date": "sdfgsdfg",
+      "featured": "sdfgsdfg",
+      "author": "sdfgsdf",
+      "readTime": "gsdfgsdfg",
+      "category": "Actualidad",
+      "id": "3342bc15-d864-478a-9f33-4b00297f4b3a",
+      "image": "/images/3342bc15-d864-478a-9f33-4b00297f4b3a/image.jpg"
+    },
+    {
+      "title": "aaaaaaaaaaa",
+      "id": "8f963ed4-1965-488a-9b9c-218178bb7b15",
+      "image": "/public/placeholder.svg",
+      "description": "",
+      "category": "",
+      "date": "",
+      "featured": "",
+      "author": "",
+      "readTime": ""
     }
   ],
   "categories": [

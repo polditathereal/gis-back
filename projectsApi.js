@@ -121,24 +121,53 @@ router.post('/', upload.fields([
     console.log('POST /projects - error: título vacío');
     return res.status(400).json({ error: 'El título no puede estar vacío.' });
   }
-  const dir = path.join(imagesDir, newProject.id);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  for (const imgKey of ["imagenPrincipal", "image1", "image2"]) {
-    if (req.files && req.files[imgKey]) {
-      const imgFile = path.join(dir, `${imgKey}.jpg`);
-      try {
-        await sharp(req.files[imgKey][0].buffer).jpeg({ quality: 90 }).toFile(imgFile);
-        newProject[imgKey] = `/images/${newProject.id}/${imgKey}.jpg`;
-        console.log(`POST /projects - imagen guardada: ${imgFile}`);
-      } catch (e) {
-        console.log(`POST /projects - error guardando imagen ${imgKey}:`, e);
-        newProject[imgKey] = defaultImage;
-      }
-    } else {
-      newProject[imgKey] = defaultImage;
-      console.log(`POST /projects - no se envió imagen para ${imgKey}`);
+  // Validar título antes de crear carpeta y guardar imágenes
+  fs.readFile(projectsPath, 'utf8', async (err, data) => {
+    if (err) {
+      console.log('POST /projects - error leyendo projects.json:', err);
+      return res.status(500).json({ error: 'Error leyendo projects.json' });
     }
-  }
+    const json = JSON.parse(data);
+    if (validateUniqueTitle(json.projects, req.body.title)) {
+      console.log('POST /projects - error: título duplicado');
+      return res.status(400).json({ error: 'Ya existe un proyecto con ese título.' });
+    }
+    const dir = path.join(imagesDir, newProject.id);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    for (const imgKey of ["imagenPrincipal", "image1", "image2"]) {
+      if (req.files && req.files[imgKey]) {
+        const imgFile = path.join(dir, `${imgKey}.jpg`);
+        try {
+          await sharp(req.files[imgKey][0].buffer)
+            .rotate() // Corrige la orientación según EXIF
+            .jpeg({ quality: 90 })
+            .toFile(imgFile);
+          newProject[imgKey] = `/images/${newProject.id}/${imgKey}.jpg`;
+          console.log(`POST /projects - imagen guardada: ${imgFile}`);
+        } catch (e) {
+          console.log(`POST /projects - error guardando imagen ${imgKey}:`, e);
+          newProject[imgKey] = defaultImage;
+        }
+      } else {
+        newProject[imgKey] = defaultImage;
+        console.log(`POST /projects - no se envió imagen para ${imgKey}`);
+      }
+    }
+    fields.forEach(key => {
+      if (!["imagenPrincipal", "image1", "image2", "id"].includes(key)) {
+        newProject[key] = req.body[key] ?? "";
+      }
+    });
+    json.projects.push(newProject);
+    fs.writeFile(projectsPath, JSON.stringify(json, null, 2), err => {
+      if (err) {
+        console.log('POST /projects - error escribiendo projects.json:', err);
+        return res.status(500).json({ error: 'Error escribiendo projects.json' });
+      }
+      console.log('POST /projects - proyecto creado:', newProject);
+      res.json(newProject);
+    });
+  });
   fields.forEach(key => {
     if (!["imagenPrincipal", "image1", "image2", "id"].includes(key)) {
       newProject[key] = req.body[key] ?? "";
@@ -186,8 +215,15 @@ router.put('/:id', upload.fields([
   for (const imgKey of ["imagenPrincipal", "image1", "image2"]) {
     if (req.files && req.files[imgKey]) {
       const imgFile = path.join(dir, `${imgKey}.jpg`);
+      // Elimina la imagen anterior si existe
+      if (fs.existsSync(imgFile)) {
+        fs.unlinkSync(imgFile);
+      }
       try {
-        await sharp(req.files[imgKey][0].buffer).jpeg({ quality: 90 }).toFile(imgFile);
+        await sharp(req.files[imgKey][0].buffer)
+          .rotate() // Corrige la orientación según EXIF
+          .jpeg({ quality: 90 })
+          .toFile(imgFile);
         updatedProject[imgKey] = `/images/${id}/${imgKey}.jpg`;
         console.log(`PUT /projects/${id} - imagen guardada: ${imgFile}`);
       } catch (e) {
