@@ -139,6 +139,7 @@ router.get('/', (req, res) => {
 });
 
 // Eliminar duplicado
+
 router.post('/', upload.single('image'), async (req, res) => {
   console.log('POST /news - body:', req.body);
   const fields = ["title", "description", "category", "date", "featured", "author", "readTime"];
@@ -147,8 +148,13 @@ router.post('/', upload.single('image'), async (req, res) => {
     console.log('POST /news - error: título vacío');
     return res.status(400).json({ error: 'El título no puede estar vacío.', status: 400 });
   }
+  // Validar que la imagen exista
+  if (!req.file) {
+    console.log('POST /news - error: imagen faltante');
+    return res.status(400).json({ error: 'La imagen es obligatoria.', status: 400 });
+  }
   newNews.id = uuidv4();
-  let imagePath = defaultImage;
+  let imagePath;
   try {
     fs.readFile(newsPath, 'utf8', async (err, data) => {
       if (err) {
@@ -161,17 +167,15 @@ router.post('/', upload.single('image'), async (req, res) => {
         return res.status(400).json({ error: 'Ya existe una noticia con ese título.', status: 400 });
       }
       // Solo crear carpeta y guardar imagen si el título es único
-      if (req.file) {
-        const dir = path.join(imagesDir, newNews.id);
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        const imgFile = path.join(dir, 'image.jpg');
-        await sharp(req.file.buffer)
-          .rotate() // Corrige la orientación según EXIF
-          .jpeg({ quality: 90 })
-          .toFile(imgFile);
-        imagePath = `/images/${newNews.id}/image.jpg`;
-        console.log('POST /news - imagen guardada:', imgFile);
-      }
+      const dir = path.join(imagesDir, newNews.id);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const imgFile = path.join(dir, 'image.jpg');
+      await sharp(req.file.buffer)
+        .rotate() // Corrige la orientación según EXIF
+        .jpeg({ quality: 90 })
+        .toFile(imgFile);
+      imagePath = `/images/${newNews.id}/image.jpg`;
+      console.log('POST /news - imagen guardada:', imgFile);
       newNews.image = imagePath;
       fields.forEach(key => {
         newNews[key] = req.body[key] ?? "";

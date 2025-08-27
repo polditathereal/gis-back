@@ -61,7 +61,7 @@
       "id": "e9b59c7d-e6c6-4358-bc1b-ceeca9d77083",
       "imagenPrincipal": "/images/e9b59c7d-e6c6-4358-bc1b-ceeca9d77083/imagenPrincipal.jpg",
       "image1": "/images/e9b59c7d-e6c6-4358-bc1b-ceeca9d77083/image1.jpg",
-      "image2": "/public/placeholder.svg",
+      "image2": "" ,
       "title": "Interventoría para el Mejoramiento de Vías Regionales - Programa Vías 2.0, Atlántico",
       "tipo": "Público",
       "tema": "",
@@ -94,9 +94,9 @@
     },
     {
       "id": "5d76209c-e8d8-4e23-bf7e-4f968e0c443d",
-      "imagenPrincipal": "/public/placeholder.svg",
-      "image1": "/public/placeholder.svg",
-      "image2": "/public/placeholder.svg",
+      "imagenPrincipal": "",
+      "image1": "",
+      "image2": "",
       "title": "wrerwerwewer",
       "tipo": "",
       "tema": "",
@@ -110,26 +110,8 @@
       "integrantes": "",
       "descripcion": "",
       "category": ""
-    },
-    {
-      "id": "d34bc095-58e5-48cf-9e5d-6dad7dd9a45f",
-      "imagenPrincipal": "/public/placeholder.svg",
-      "image1": "/public/placeholder.svg",
-      "image2": "/public/placeholder.svg",
-      "title": "bbbbbbbbbbbbbbb",
-      "tipo": "",
-      "tema": "",
-      "entidadContratante": "",
-      "paisOrigen": "",
-      "tipo2": "",
-      "objeto": "",
-      "fechaInicial": "0314-12-04",
-      "fechaFinal": "0004-03-12",
-      "consorcio": "",
-      "integrantes": "",
-      "descripcion": "",
-      "category": ""
     }
+    
   ],
   "categories": [
     {
@@ -153,19 +135,14 @@
       "color": "#eab308"
     },
     {
-      "id": "asdf",
-      "name": "asdf",
-      "color": "#ca3f3f"
-    },
-    {
       "id": "fcdtrdygvytf",
       "name": "fcdtrdygvytf",
-      "color": "#0741ed"
+      "color": "#243c84"
     },
     {
       "id": "Férreo",
       "name": "Férreo",
-      "color": "#a86405"
+      "color": "#a80536"
     }
   ]
 }

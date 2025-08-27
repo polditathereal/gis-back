@@ -106,6 +106,7 @@ router.get('/', (req, res) => {
   });
 });
 
+
 router.post('/', upload.fields([
   { name: 'imagenPrincipal', maxCount: 1 },
   { name: 'image1', maxCount: 1 },
@@ -121,7 +122,11 @@ router.post('/', upload.fields([
     console.log('POST /projects - error: título vacío');
     return res.status(400).json({ error: 'El título no puede estar vacío.' });
   }
-  // Validar título antes de crear carpeta y guardar imágenes
+  // Validar que la imagen principal exista
+  if (!req.files || !req.files['imagenPrincipal']) {
+    console.log('POST /projects - error: imagen principal faltante');
+    return res.status(400).json({ error: 'La imagen principal es obligatoria.' });
+  }
   fs.readFile(projectsPath, 'utf8', async (err, data) => {
     if (err) {
       console.log('POST /projects - error leyendo projects.json:', err);
@@ -140,22 +145,36 @@ router.post('/', upload.fields([
     }
     const dir = path.join(imagesDir, newProject.id);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    for (const imgKey of ["imagenPrincipal", "image1", "image2"]) {
+    // Imagen principal obligatoria
+    try {
+      const imgFile = path.join(dir, `imagenPrincipal.jpg`);
+      await sharp(req.files['imagenPrincipal'][0].buffer)
+        .rotate()
+        .jpeg({ quality: 90 })
+        .toFile(imgFile);
+      newProject['imagenPrincipal'] = `/images/${newProject.id}/imagenPrincipal.jpg`;
+      console.log(`POST /projects - imagen principal guardada: ${imgFile}`);
+    } catch (e) {
+      console.log(`POST /projects - error guardando imagen principal:`, e);
+      return res.status(500).json({ error: 'Error procesando la imagen principal.' });
+    }
+    // Imágenes secundarias (solo si llegan)
+    for (const imgKey of ["image1", "image2"]) {
       if (req.files && req.files[imgKey]) {
         const imgFile = path.join(dir, `${imgKey}.jpg`);
         try {
           await sharp(req.files[imgKey][0].buffer)
-            .rotate() // Corrige la orientación según EXIF
+            .rotate()
             .jpeg({ quality: 90 })
             .toFile(imgFile);
           newProject[imgKey] = `/images/${newProject.id}/${imgKey}.jpg`;
           console.log(`POST /projects - imagen guardada: ${imgFile}`);
         } catch (e) {
           console.log(`POST /projects - error guardando imagen ${imgKey}:`, e);
-          newProject[imgKey] = defaultImage;
+          newProject[imgKey] = undefined;
         }
       } else {
-        newProject[imgKey] = defaultImage;
+        newProject[imgKey] = undefined;
         console.log(`POST /projects - no se envió imagen para ${imgKey}`);
       }
     }
@@ -164,7 +183,6 @@ router.post('/', upload.fields([
         // Validación y normalización de fechas
         if (key === "fechaInicial" || key === "fechaFinal") {
           let val = req.body[key] ?? "";
-          // Solo acepta fechas válidas tipo YYYY-MM-DD
           if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
             const d = new Date(val);
             val = !isNaN(d.getTime()) ? d.toISOString().slice(0,10) : "";
