@@ -65,6 +65,28 @@
       "featured": "",
       "author": "",
       "readTime": ""
+    },
+    {
+      "title": "afsdsdafsdaf",
+      "id": "ad650bb0-2417-4dd4-8c70-36ee9716e7bc",
+      "image": "/images/ad650bb0-2417-4dd4-8c70-36ee9716e7bc/image.jpg",
+      "description": "",
+      "category": "",
+      "date": "",
+      "featured": "",
+      "author": "",
+      "readTime": ""
+    },
+    {
+      "title": "fsadfsdf",
+      "id": "b2072c65-c3db-49e1-9a9c-b0c3c8278270",
+      "image": "/images/b2072c65-c3db-49e1-9a9c-b0c3c8278270/image.jpg",
+      "description": "",
+      "category": "",
+      "date": "",
+      "featured": "",
+      "author": "",
+      "readTime": ""
     }
   ],
   "categories": [
@@ -76,7 +98,7 @@
     {
       "id": "Actualidad",
       "name": "Actualidad",
-      "color": "#3b82f6"
+      "color": "#3beaf7"
     },
     {
       "id": "Eventos",

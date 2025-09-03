@@ -2,22 +2,112 @@ require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const sharp = require('sharp');
+const nodeFetch = (...args) => import('node-fetch').then(mod => mod.default(...args));
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
+const { requireToken } = require('./usersApi');
 
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const imagesDir = process.env.IMAGES_DIR || path.join(dataDir, 'images');
 const newsPath = process.env.NEWS_PATH || path.join(dataDir, 'news.json');
 const projectsPath = process.env.PROJECTS_PATH || path.join(dataDir, 'projects.json');
 const defaultImage = process.env.DEFAULT_IMAGE || '/public/placeholder.svg';
+const BUNNY_STORAGE_API = process.env.BUNNY_STORAGE_API || 'https://br.storage.bunnycdn.com/gis-images';
+const BUNNY_STORAGE_ACCESS_KEY = process.env.BUNNY_STORAGE_ACCESS_KEY || '';
+const BUNNY_STORAGE_READONLY_KEY = process.env.BUNNY_STORAGE_READONLY_KEY || '';
+
 function validateUniqueTitle(list, title, excludeId = null) {
   return list.some(item => item.title === title && item.id !== excludeId);
 }
 
+function categoryExists(categories, name, excludeId = null) {
+  return categories.some(cat => cat.name === name && cat.id !== excludeId);
+}
+
+function validateCategoryInput(body) {
+  if (!body.name || !body.color) {
+    return { valid: false, error: 'El nombre y el color son obligatorios.' };
+  }
+  return { valid: true };
+}
+
+async function uploadToBunnyStorage(localPath, remotePath, readOnly = false) {
+  const accessKey = readOnly ? BUNNY_STORAGE_READONLY_KEY : BUNNY_STORAGE_ACCESS_KEY;
+  const fullRemotePath = `images/${remotePath}`;
+  const url = `${BUNNY_STORAGE_API}/${fullRemotePath}`;
+  try {
+    const res = await nodeFetch(url, {
+      method: 'PUT',
+      body: fs.createReadStream(localPath),
+      headers: { AccessKey: accessKey }
+    });
+    const text = await res.text();
+    console.log(`[BUNNY] Subiendo archivo local: ${localPath}`);
+    console.log(`[BUNNY] URL: ${url}`);
+    console.log(`[BUNNY] AccessKey usada: ${accessKey}`);
+    console.log(`[BUNNY] Código de respuesta: ${res.status}`);
+    console.log(`[BUNNY] Respuesta Bunny: ${text}`);
+    return res.status === 201 || res.status === 200;
+  } catch (err) {
+    console.log(`[BUNNY] Error subiendo a Bunny:`, err);
+    return false;
+  }
+}
+
+async function uploadToBunnyStorageFromBuffer(buffer, remotePath, readOnly = false) {
+  const accessKey = readOnly ? BUNNY_STORAGE_READONLY_KEY : BUNNY_STORAGE_ACCESS_KEY;
+  const fullRemotePath = `images/${remotePath}`;
+  const url = `${BUNNY_STORAGE_API}/${fullRemotePath}`;
+  try {
+    const res = await nodeFetch(url, {
+      method: 'PUT',
+      body: buffer,
+      headers: { AccessKey: accessKey }
+    });
+    const text = await res.text();
+    let success = false;
+    try {
+      const bunnyRes = JSON.parse(text);
+      success = res.status === 201 && bunnyRes.Message === "File uploaded.";
+    } catch {
+      success = false;
+    }
+    console.log(`[BUNNY] Subiendo buffer a: ${url}`);
+    console.log(`[BUNNY] AccessKey usada: ${accessKey}`);
+    console.log(`[BUNNY] Código de respuesta: ${res.status}`);
+    console.log(`[BUNNY] Respuesta Bunny: ${text}`);
+    return success;
+  } catch (err) {
+    console.log(`[BUNNY] Error subiendo a Bunny:`, err);
+    return false;
+  }
+}
+
+async function deleteFromBunnyStorage(remotePath, readOnly = false) {
+  const accessKey = readOnly ? BUNNY_STORAGE_READONLY_KEY : BUNNY_STORAGE_ACCESS_KEY;
+  const fullRemotePath = `images/${remotePath}`;
+  const url = `${BUNNY_STORAGE_API}/${fullRemotePath}`;
+  try {
+    const res = await nodeFetch(url, {
+      method: 'DELETE',
+      headers: { AccessKey: accessKey }
+    });
+    const text = await res.text();
+    console.log(`[BUNNY] Eliminando archivo remoto: ${url}`);
+    console.log(`[BUNNY] Código de respuesta DELETE: ${res.status}`);
+    console.log(`[BUNNY] Respuesta Bunny DELETE: ${text}`);
+    return res.status === 200 || res.status === 204;
+  } catch (err) {
+    console.log(`[BUNNY] Error eliminando en Bunny:`, err);
+    return false;
+  }
+}
+
 // --- NEWS CATEGORIES ---
-router.post('/categories', (req, res) => {
+router.post('/categories', requireToken, (req, res) => {
+  console.log(`[NEWS] POST /categories - usuario: ${req.user?.username}, token: ${req.user?.token}`);
   console.log('POST /news/categories - body:', req.body);
   const { name, color } = req.body;
   const validation = validateCategoryInput(req.body);
@@ -48,42 +138,44 @@ router.post('/categories', (req, res) => {
   });
 });
 
-router.put('/categories/:id', (req, res) => {
-  console.log(`PUT /news/categories/${req.params.id} - body:`, req.body);
+router.put('/categories/:id', requireToken, (req, res) => {
+  console.log(`[NEWS] PUT /categories/${req.params.id} - usuario: ${req.user?.username}, token: ${req.user?.token}`);
+  console.log(`[NEWS] PUT /categories/${req.params.id} - body:`, req.body);
   const { name, color } = req.body;
   const validation = validateCategoryInput(req.body);
   if (!validation.valid) {
-    console.log(`PUT /news/categories/${req.params.id} - error: validación fallida:`, validation.error);
+    console.log(`[NEWS] PUT /categories/${req.params.id} - error: validación fallida:`, validation.error);
     return res.status(400).json({ error: validation.error });
   }
   fs.readFile(newsPath, 'utf8', (err, data) => {
     if (err) {
-      console.log(`PUT /news/categories/${req.params.id} - error leyendo news.json:`, err);
+      console.log(`[NEWS] PUT /categories/${req.params.id} - error leyendo news.json:`, err);
       return res.status(500).json({ error: 'Error reading news.json' });
     }
     const json = JSON.parse(data);
     const idx = json.categories.findIndex(cat => cat.id === req.params.id);
     if (idx === -1) {
-      console.log(`PUT /news/categories/${req.params.id} - error: categoría no encontrada`);
+      console.log(`[NEWS] PUT /categories/${req.params.id} - error: categoría no encontrada`);
       return res.status(404).json({ error: 'Categoría no encontrada.' });
     }
-    if (name !== req.params.id && categoryExists(json.categories, name)) {
-      console.log(`PUT /news/categories/${req.params.id} - error: categoría duplicada`);
+    if (name !== req.params.id && categoryExists(json.categories, name, req.params.id)) {
+      console.log(`[NEWS] PUT /categories/${req.params.id} - error: categoría duplicada`);
       return res.status(400).json({ error: 'Ya existe una categoría con ese nombre.' });
     }
     json.categories[idx] = { id: name, name, color };
     fs.writeFile(newsPath, JSON.stringify(json, null, 2), err => {
       if (err) {
-        console.log(`PUT /news/categories/${req.params.id} - error escribiendo news.json:`, err);
+        console.log(`[NEWS] PUT /categories/${req.params.id} - error escribiendo news.json:`, err);
         return res.status(500).json({ error: 'Error writing news.json' });
       }
-      console.log(`PUT /news/categories/${req.params.id} - categoría actualizada:`, json.categories[idx]);
+      console.log(`[NEWS] PUT /categories/${req.params.id} - categoría actualizada:`, json.categories[idx]);
       res.json(json.categories[idx]);
     });
   });
 });
 
-router.delete('/categories/:id', (req, res) => {
+router.delete('/categories/:id', requireToken, (req, res) => {
+  console.log(`[NEWS] DELETE /categories/${req.params.id} - usuario: ${req.user?.username}, token: ${req.user?.token}`);
   console.log(`DELETE /news/categories/${req.params.id}`);
   fs.readFile(newsPath, 'utf8', (err, data) => {
     if (err) {
@@ -140,7 +232,8 @@ router.get('/', (req, res) => {
 
 // Eliminar duplicado
 
-router.post('/', upload.single('image'), async (req, res) => {
+router.post('/', requireToken, upload.single('image'), async (req, res) => {
+  console.log(`[NEWS] POST / - usuario: ${req.user?.username}, token: ${req.user?.token}`);
   console.log('POST /news - body:', req.body);
   const fields = ["title", "description", "category", "date", "featured", "author", "readTime"];
   const newNews = req.body;
@@ -167,15 +260,14 @@ router.post('/', upload.single('image'), async (req, res) => {
         return res.status(400).json({ error: 'Ya existe una noticia con ese título.', status: 400 });
       }
       // Solo crear carpeta y guardar imagen si el título es único
-      const dir = path.join(imagesDir, newNews.id);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      const imgFile = path.join(dir, 'image.jpg');
-      await sharp(req.file.buffer)
-        .rotate() // Corrige la orientación según EXIF
+      const buffer = await sharp(req.file.buffer)
+        .rotate()
         .jpeg({ quality: 90 })
-        .toFile(imgFile);
+        .toBuffer();
       imagePath = `/images/${newNews.id}/image.jpg`;
-      console.log('POST /news - imagen guardada:', imgFile);
+      // Subir a Bunny Storage
+      await uploadToBunnyStorageFromBuffer(buffer, `${newNews.id}/image.jpg`);
+      console.log(`[NEWS] Imagen subida a Bunny: images/${newNews.id}/image.jpg`);
       newNews.image = imagePath;
       fields.forEach(key => {
         newNews[key] = req.body[key] ?? "";
@@ -197,54 +289,61 @@ router.post('/', upload.single('image'), async (req, res) => {
 });
 
 // Eliminar duplicado
-router.put('/:id', upload.single('image'), async (req, res) => {
+router.put('/:id', requireToken, upload.single('image'), async (req, res) => {
+  console.log(`[NEWS] PUT /${req.params.id} - usuario: ${req.user?.username}, token: ${req.user?.token}`);
   console.log(`PUT /news/${req.params.id} - body:`, req.body);
   const id = req.params.id;
   const fields = ["title", "description", "category", "date", "featured", "author", "readTime"];
-  const updatedNews = req.body;
-  if (!updatedNews.title || updatedNews.title.trim() === "") {
-    console.log(`PUT /news/${id} - error: título vacío`);
-    return res.status(400).json({ error: 'El título no puede estar vacío.', status: 400 });
-  }
-  updatedNews.id = id;
-  let imagePath = defaultImage;
-  try {
-    if (req.file) {
-      const dir = path.join(imagesDir, id);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      const imgFile = path.join(dir, 'image.jpg');
-      // Elimina la imagen anterior si existe
-      if (fs.existsSync(imgFile)) {
-        fs.unlinkSync(imgFile);
-      }
-      await sharp(req.file.buffer)
-        .rotate() // Corrige la orientación según EXIF
-        .jpeg({ quality: 90 })
-        .toFile(imgFile);
-      imagePath = `/images/${id}/image.jpg`;
-      console.log(`PUT /news/${id} - imagen guardada:`, imgFile);
-    } else {
-      imagePath = req.body.image || defaultImage;
-      console.log(`PUT /news/${id} - no se envió imagen, usando:`, imagePath);
+  // Leer la noticia actual para mantener la ruta de imagen si no se sube nueva
+  fs.readFile(newsPath, 'utf8', async (err, data) => {
+    if (err) {
+      console.log(`PUT /news/${id} - error leyendo news.json:`, err);
+      return res.status(500).json({ error: 'Error leyendo news.json', status: 500 });
     }
-    updatedNews.image = imagePath;
-    fields.forEach(key => {
-      updatedNews[key] = req.body[key] ?? "";
-    });
-    fs.readFile(newsPath, 'utf8', (err, data) => {
-      if (err) {
-        console.log(`PUT /news/${id} - error leyendo news.json:`, err);
-        return res.status(500).json({ error: 'Error leyendo news.json', status: 500 });
+    const json = JSON.parse(data);
+    const idx = json.news.findIndex(n => n.id === id);
+    if (idx === -1) {
+      console.log(`PUT /news/${id} - error: noticia no encontrada`);
+      return res.status(404).json({ error: 'Noticia no encontrada', status: 404 });
+    }
+    const prevNews = json.news[idx];
+    const updatedNews = req.body;
+    if (!updatedNews.title || updatedNews.title.trim() === "") {
+      console.log(`PUT /news/${id} - error: título vacío`);
+      return res.status(400).json({ error: 'El título no puede estar vacío.', status: 400 });
+    }
+    updatedNews.id = id;
+    let imagePath = prevNews.image || defaultImage;
+    try {
+      if (req.file) {
+        if (prevNews.image && typeof prevNews.image === 'string' && prevNews.image.startsWith('/images/')) {
+          await deleteFromBunnyStorage(`${id}/image.jpg`);
+        }
+        const buffer = await sharp(req.file.buffer)
+          .rotate()
+          .jpeg({ quality: 90 })
+          .toBuffer();
+        const uploadSuccess = await uploadToBunnyStorageFromBuffer(buffer, `${id}/image.jpg`);
+        if (uploadSuccess) {
+          imagePath = `/images/${id}/image.jpg`;
+          console.log(`[NEWS] Imagen modificada subida a Bunny: images/${id}/image.jpg`);
+        } else {
+          imagePath = prevNews.image || defaultImage;
+          console.log(`[NEWS] ERROR: Bunny no subió la imagen, se mantiene la anterior`);
+        }
+      } else if (req.body.image && typeof req.body.image === 'string' && req.body.image.startsWith('/images/')) {
+        imagePath = req.body.image;
+        console.log(`PUT /news/${id} - no se envió imagen, se mantiene la anterior (por URL recibida)`);
+      } else {
+        console.log(`PUT /news/${id} - no se envió imagen, se mantiene la anterior`);
       }
-      const json = JSON.parse(data);
+      updatedNews.image = imagePath;
+      fields.forEach(key => {
+        updatedNews[key] = req.body[key] ?? "";
+      });
       if (validateUniqueTitle(json.news, updatedNews.title, id)) {
         console.log(`PUT /news/${id} - error: título duplicado`);
         return res.status(400).json({ error: 'Ya existe una noticia con ese título.', status: 400 });
-      }
-      const idx = json.news.findIndex(n => n.id === id);
-      if (idx === -1) {
-        console.log(`PUT /news/${id} - error: noticia no encontrada`);
-        return res.status(404).json({ error: 'Noticia no encontrada', status: 404 });
       }
       json.news[idx] = updatedNews;
       fs.writeFile(newsPath, JSON.stringify(json, null, 2), err => {
@@ -255,14 +354,15 @@ router.put('/:id', upload.single('image'), async (req, res) => {
         console.log(`PUT /news/${id} - noticia editada:`, updatedNews);
         res.json({ message: 'Noticia editada correctamente', news: updatedNews, status: 200 });
       });
-    });
-  } catch (e) {
-    console.log(`PUT /news/${id} - error procesando imagen o editando noticia:`, e);
-    res.status(500).json({ error: 'Error procesando la imagen o editando la noticia', details: e?.message, status: 500 });
-  }
+    } catch (e) {
+      console.log(`PUT /news/${id} - error procesando imagen o editando noticia:`, e);
+      res.status(500).json({ error: 'Error procesando la imagen o editando la noticia', details: e?.message, status: 500 });
+    }
+  });
 });
 
-router.delete('/:id', (req, res) => {
+router.delete('/:id', requireToken, (req, res) => {
+  console.log(`[NEWS] DELETE /${req.params.id} - usuario: ${req.user?.username}, token: ${req.user?.token}`);
   const id = req.params.id;
   console.log(`DELETE /news/${id}`);
   fs.readFile(newsPath, 'utf8', (err, data) => {
@@ -298,24 +398,28 @@ router.delete('/:id', (req, res) => {
         if (!err2) {
           try {
             const projectsJson = JSON.parse(data2);
-            validProjectIds = Array.isArray(projectsJson.projects) ? projectsJson.projects.map(p => p.id) : [];
+            validProjectIds = Array.isArray(projectsJson.projects)
+              ? projectsJson.projects.map(p => p.id)
+              : [];
           } catch (e) {
             console.log(`DELETE /news/${id} - error parseando projects.json:`, e);
           }
         }
-        fs.readdir(imagesDir, (err, folders) => {
-          if (!err && Array.isArray(folders)) {
+        // Repasar todas las carpetas en imagesDir
+        fs.readdir(imagesDir, (err3, folders) => {
+          if (!err3 && Array.isArray(folders)) {
+            // Obtener ids válidos de noticias y proyectos
             const validNewsIds = json.news.map(n => n.id);
-            const validIds = [...validNewsIds, ...validProjectIds];
+            const validIds = validNewsIds.concat(validProjectIds);
             folders.forEach(folder => {
               const folderPath = path.join(imagesDir, folder);
-              if (!validIds.includes(folder) && fs.lstatSync(folderPath).isDirectory()) {
-                try {
+              try {
+                if (!validIds.includes(folder) && fs.lstatSync(folderPath).isDirectory()) {
                   fs.rmSync(folderPath, { recursive: true, force: true });
                   console.log(`DELETE /news/${id} - carpeta huérfana eliminada:`, folderPath);
-                } catch (e) {
-                  console.log(`DELETE /news/${id} - error eliminando carpeta huérfana:`, e);
                 }
+              } catch (e) {
+                console.log(`DELETE /news/${id} - error eliminando carpeta huérfana:`, e);
               }
             });
           }

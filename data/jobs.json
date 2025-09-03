@@ -47,13 +47,20 @@
       "date": "2024-06-18",
       "category": "ambiental",
       "linkedin": "https://www.linkedin.com/jobs/view/1122334455"
+    },
+    {
+      "title": "asefasdf",
+      "description": "adsfasdf",
+      "date": "4123-02-13",
+      "category": "ingenieria",
+      "id": "2d1d3cd1-3703-4797-bda7-4cfd75e8617b"
     }
   ],
   "categories": [
     {
-      "id": "ingenieria",
+      "id": "Ingeniería",
       "name": "Ingeniería",
-      "color": "#1976d2"
+      "color": "#1978d2"
     },
     {
       "id": "administracion",

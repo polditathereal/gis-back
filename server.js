@@ -14,6 +14,7 @@ app.use(express.json());
 const projectsApi = require('./projectsApi');
 const newsApi = require('./newsApi');
 const jobsApi = require('./jobsApi');
+const usersApi = require('./usersApi');
 
 // Servir imágenes estáticas directamente desde /images
 app.use('/images', express.static(imagesDir));
@@ -21,6 +22,7 @@ app.use('/images', express.static(imagesDir));
 app.use('/projects', projectsApi);
 app.use('/news', newsApi);
 app.use('/jobs', jobsApi);
+app.use('/users', usersApi.router);
 
 app.listen(PORT, () => {
   console.log(`API server running on http://localhost:${PORT}`);

@@ -6,12 +6,17 @@ const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
+const { requireToken } = require('./usersApi');
+const nodeFetch = (...args) => import('node-fetch').then(mod => mod.default(...args));
 
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const imagesDir = process.env.IMAGES_DIR || path.join(dataDir, 'images');
 const projectsPath = process.env.PROJECTS_PATH || path.join(dataDir, 'projects.json');
 const newsPath = process.env.NEWS_PATH || path.join(dataDir, 'news.json');
 const defaultImage = process.env.DEFAULT_IMAGE || '/public/placeholder.svg';
+const BUNNY_STORAGE_API = process.env.BUNNY_STORAGE_API || 'https://br.storage.bunnycdn.com/gis-images';
+const BUNNY_STORAGE_ACCESS_KEY = process.env.BUNNY_STORAGE_ACCESS_KEY || '';
+const BUNNY_STORAGE_READONLY_KEY = process.env.BUNNY_STORAGE_READONLY_KEY || '';
 
 function validateUniqueTitle(list, title, excludeId = null) {
   return list.some(item => item.title === title && item.id !== excludeId);
@@ -22,12 +27,116 @@ function validateCategoryInput(body) {
   }
   return { valid: true };
 }
-function categoryExists(categories, name) {
-  return categories.some(cat => cat.name === name);
+function categoryExists(categories, name, excludeId = null) {
+  return categories.some(cat => cat.name === name && cat.id !== excludeId);
+}
+
+async function uploadToBunnyStorage(localPath, remotePath, readOnly = false) {
+  const accessKey = readOnly ? BUNNY_STORAGE_READONLY_KEY : BUNNY_STORAGE_ACCESS_KEY;
+  const fullRemotePath = `images/${remotePath}`;
+  const url = `${BUNNY_STORAGE_API}/${fullRemotePath}`;
+  try {
+    const res = await nodeFetch(url, {
+      method: 'PUT',
+      body: fs.createReadStream(localPath),
+      headers: { AccessKey: accessKey }
+    });
+    const text = await res.text();
+    console.log(`[BUNNY] Subiendo archivo local: ${localPath}`);
+    console.log(`[BUNNY] URL: ${url}`);
+    console.log(`[BUNNY] AccessKey usada: ${accessKey}`);
+    console.log(`[BUNNY] Código de respuesta: ${res.status}`);
+    console.log(`[BUNNY] Respuesta Bunny: ${text}`);
+    return res.status === 201 || res.status === 200;
+  } catch (err) {
+    console.log(`[BUNNY] Error subiendo a Bunny:`, err);
+    return false;
+  }
+}
+
+async function uploadToBunnyStorageFromBuffer(buffer, remotePath, readOnly = false) {
+  const accessKey = readOnly ? BUNNY_STORAGE_READONLY_KEY : BUNNY_STORAGE_ACCESS_KEY;
+  const fullRemotePath = `images/${remotePath}`;
+  const url = `${BUNNY_STORAGE_API}/${fullRemotePath}`;
+  try {
+    const res = await nodeFetch(url, {
+      method: 'PUT',
+      body: buffer,
+      headers: {
+        AccessKey: accessKey,
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'no-cache'
+      }
+    });
+    const text = await res.text();
+    let success = false;
+    try {
+      const bunnyRes = JSON.parse(text);
+      success = res.status === 201 && bunnyRes.Message === "File uploaded.";
+    } catch {
+      success = false;
+    }
+    console.log(`[BUNNY] Subiendo buffer a: ${url}`);
+    console.log(`[BUNNY] AccessKey usada: ${accessKey}`);
+    console.log(`[BUNNY] Código de respuesta: ${res.status}`);
+    console.log(`[BUNNY] Respuesta Bunny: ${text}`);
+    // Purga la CDN después de subir
+    if (success) {
+      await purgeBunnyCDN(fullRemotePath);
+    }
+    return success;
+  } catch (err) {
+    console.log(`[BUNNY] Error subiendo a Bunny:`, err);
+    return false;
+  }
+}
+
+async function deleteFromBunnyStorage(remotePath, readOnly = false) {
+  const accessKey = readOnly ? BUNNY_STORAGE_READONLY_KEY : BUNNY_STORAGE_ACCESS_KEY;
+  const fullRemotePath = `images/${remotePath}`;
+  const url = `${BUNNY_STORAGE_API}/${fullRemotePath}`;
+  try {
+    const res = await nodeFetch(url, {
+      method: 'DELETE',
+      headers: { AccessKey: accessKey }
+    });
+    const text = await res.text();
+    console.log(`[BUNNY] Eliminando archivo remoto: ${url}`);
+    console.log(`[BUNNY] Código de respuesta DELETE: ${res.status}`);
+    console.log(`[BUNNY] Respuesta Bunny DELETE: ${text}`);
+    return res.status === 200 || res.status === 204;
+  } catch (err) {
+    console.log(`[BUNNY] Error eliminando en Bunny:`, err);
+    return false;
+  }
+}
+
+async function purgeBunnyCDN(remotePath) {
+  // Reemplaza estos valores por los de tu cuenta Bunny
+  const cdnApiKey = process.env.BUNNY_CDN_API_KEY;
+  const cdnZoneUrl = process.env.BUNNY_CDN_ZONE_URL; // Ejemplo: https://yourzone.b-cdn.net
+  if (!cdnApiKey || !cdnZoneUrl) {
+    console.warn('[BUNNY] CDN purge no configurado');
+    return false;
+  }
+  const url = `https://api.bunny.net/purge?url=${cdnZoneUrl}/${remotePath}`;
+  try {
+    const res = await nodeFetch(url, {
+      method: 'POST',
+      headers: { AccessKey: cdnApiKey }
+    });
+    const text = await res.text();
+    console.log(`[BUNNY] Purge CDN: ${url}`);
+    console.log(`[BUNNY] Purge response: ${res.status} - ${text}`);
+    return res.status === 200;
+  } catch (err) {
+    console.log(`[BUNNY] Error purgando CDN:`, err);
+    return false;
+  }
 }
 
 // --- PROJECTS CATEGORIES ---
-router.post('/categories', (req, res) => {
+router.post('/categories', requireToken, (req, res) => {
   const { name, color } = req.body;
   const validation = validateCategoryInput(req.body);
   if (!validation.valid) return res.status(400).json({ error: validation.error });
@@ -46,27 +155,43 @@ router.post('/categories', (req, res) => {
   });
 });
 
-router.put('/categories/:id', (req, res) => {
+router.put('/categories/:id', requireToken, (req, res) => {
+  console.log(`[PROJECTS] PUT /categories/${req.params.id} - usuario: ${req.user?.username}, token: ${req.user?.token}`);
+  console.log(`[PROJECTS] PUT /categories/${req.params.id} - body:`, req.body);
   const { name, color } = req.body;
   const validation = validateCategoryInput(req.body);
-  if (!validation.valid) return res.status(400).json({ error: validation.error });
+  if (!validation.valid) {
+    console.log(`[PROJECTS] PUT /categories/${req.params.id} - error: validación fallida:`, validation.error);
+    return res.status(400).json({ error: validation.error });
+  }
   fs.readFile(projectsPath, 'utf8', (err, data) => {
-    if (err) return res.status(500).json({ error: 'Error reading projects.json' });
+    if (err) {
+      console.log(`[PROJECTS] PUT /categories/${req.params.id} - error leyendo projects.json:`, err);
+      return res.status(500).json({ error: 'Error reading projects.json' });
+    }
     const json = JSON.parse(data);
     const idx = json.categories.findIndex(cat => cat.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: 'Categoría no encontrada.' });
-    if (name !== req.params.id && categoryExists(json.categories, name)) {
+    if (idx === -1) {
+      console.log(`[PROJECTS] PUT /categories/${req.params.id} - error: categoría no encontrada`);
+      return res.status(404).json({ error: 'Categoría no encontrada.' });
+    }
+    if (name !== req.params.id && categoryExists(json.categories, name, req.params.id)) {
+      console.log(`[PROJECTS] PUT /categories/${req.params.id} - error: categoría duplicada`);
       return res.status(400).json({ error: 'Ya existe una categoría con ese nombre.' });
     }
     json.categories[idx] = { id: name, name, color };
     fs.writeFile(projectsPath, JSON.stringify(json, null, 2), err => {
-      if (err) return res.status(500).json({ error: 'Error writing projects.json' });
+      if (err) {
+        console.log(`[PROJECTS] PUT /categories/${req.params.id} - error escribiendo projects.json:`, err);
+        return res.status(500).json({ error: 'Error writing projects.json' });
+      }
+      console.log(`[PROJECTS] PUT /categories/${req.params.id} - categoría actualizada:`, json.categories[idx]);
       res.json(json.categories[idx]);
     });
   });
 });
 
-router.delete('/categories/:id', (req, res) => {
+router.delete('/categories/:id', requireToken, (req, res) => {
   fs.readFile(projectsPath, 'utf8', (err, data) => {
     if (err) return res.status(500).json({ error: 'Error reading projects.json' });
     const json = JSON.parse(data);
@@ -107,7 +232,7 @@ router.get('/', (req, res) => {
 });
 
 
-router.post('/', upload.fields([
+router.post('/', requireToken, upload.fields([
   { name: 'imagenPrincipal', maxCount: 1 },
   { name: 'image1', maxCount: 1 },
   { name: 'image2', maxCount: 1 }
@@ -143,17 +268,16 @@ router.post('/', upload.fields([
       console.log('POST /projects - error: título duplicado');
       return res.status(400).json({ error: 'Ya existe un proyecto con ese título.' });
     }
-    const dir = path.join(imagesDir, newProject.id);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     // Imagen principal obligatoria
     try {
-      const imgFile = path.join(dir, `imagenPrincipal.jpg`);
-      await sharp(req.files['imagenPrincipal'][0].buffer)
+      const buffer = await sharp(req.files['imagenPrincipal'][0].buffer)
         .rotate()
         .jpeg({ quality: 90 })
-        .toFile(imgFile);
+        .toBuffer();
       newProject['imagenPrincipal'] = `/images/${newProject.id}/imagenPrincipal.jpg`;
-      console.log(`POST /projects - imagen principal guardada: ${imgFile}`);
+      // Subir a Bunny Storage
+      await uploadToBunnyStorageFromBuffer(buffer, `${newProject.id}/imagenPrincipal.jpg`);
+      console.log(`[PROJECTS] Imagen principal subida a Bunny: images/${newProject.id}/imagenPrincipal.jpg`);
     } catch (e) {
       console.log(`POST /projects - error guardando imagen principal:`, e);
       return res.status(500).json({ error: 'Error procesando la imagen principal.' });
@@ -161,14 +285,14 @@ router.post('/', upload.fields([
     // Imágenes secundarias (solo si llegan)
     for (const imgKey of ["image1", "image2"]) {
       if (req.files && req.files[imgKey]) {
-        const imgFile = path.join(dir, `${imgKey}.jpg`);
         try {
-          await sharp(req.files[imgKey][0].buffer)
+          const buffer = await sharp(req.files[imgKey][0].buffer)
             .rotate()
             .jpeg({ quality: 90 })
-            .toFile(imgFile);
+            .toBuffer();
           newProject[imgKey] = `/images/${newProject.id}/${imgKey}.jpg`;
-          console.log(`POST /projects - imagen guardada: ${imgFile}`);
+          await uploadToBunnyStorageFromBuffer(buffer, `${newProject.id}/${imgKey}.jpg`);
+          console.log(`[PROJECTS] Imagen secundaria subida a Bunny: images/${newProject.id}/${imgKey}.jpg`);
         } catch (e) {
           console.log(`POST /projects - error guardando imagen ${imgKey}:`, e);
           newProject[imgKey] = undefined;
@@ -207,7 +331,7 @@ router.post('/', upload.fields([
   });
 });
 
-router.put('/:id', upload.fields([
+router.put('/:id', requireToken, upload.fields([
   { name: 'imagenPrincipal', maxCount: 1 },
   { name: 'image1', maxCount: 1 },
   { name: 'image2', maxCount: 1 }
@@ -217,55 +341,68 @@ router.put('/:id', upload.fields([
   const fields = [
     "title", "tipo", "tema", "entidadContratante", "paisOrigen", "tipo2", "objeto", "fechaInicial", "fechaFinal", "consorcio", "integrantes", "descripcion", "category", "imagenPrincipal", "image1", "image2"
   ];
-  const updatedProject = { id };
-  if (!req.body.title || req.body.title.trim() === "") {
-    console.log(`PUT /projects/${id} - error: título vacío`);
-    return res.status(400).json({ error: 'El título no puede estar vacío.' });
-  }
-  const dir = path.join(imagesDir, id);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  for (const imgKey of ["imagenPrincipal", "image1", "image2"]) {
-    if (req.files && req.files[imgKey]) {
-      const imgFile = path.join(dir, `${imgKey}.jpg`);
-      // Elimina la imagen anterior si existe
-      if (fs.existsSync(imgFile)) {
-        fs.unlinkSync(imgFile);
-      }
-      try {
-        await sharp(req.files[imgKey][0].buffer)
-          .rotate() // Corrige la orientación según EXIF
-          .jpeg({ quality: 90 })
-          .toFile(imgFile);
-        updatedProject[imgKey] = `/images/${id}/${imgKey}.jpg`;
-        console.log(`PUT /projects/${id} - imagen guardada: ${imgFile}`);
-      } catch (e) {
-        console.log(`PUT /projects/${id} - error guardando imagen ${imgKey}:`, e);
-        updatedProject[imgKey] = req.body[imgKey] || defaultImage;
-      }
-    } else {
-      updatedProject[imgKey] = req.body[imgKey] || defaultImage;
-      console.log(`PUT /projects/${id} - no se envió imagen para ${imgKey}`);
-    }
-  }
-  fields.forEach(key => {
-    if (!["imagenPrincipal", "image1", "image2", "id"].includes(key)) {
-      updatedProject[key] = req.body[key] ?? "";
-    }
-  });
-  fs.readFile(projectsPath, 'utf8', (err, data) => {
+  fs.readFile(projectsPath, 'utf8', async (err, data) => {
     if (err) {
       console.log(`PUT /projects/${id} - error leyendo projects.json:`, err);
       return res.status(500).json({ error: 'Error reading projects.json' });
     }
     const json = JSON.parse(data);
-    if (validateUniqueTitle(json.projects, updatedProject.title, id)) {
-      console.log(`PUT /projects/${id} - error: título duplicado`);
-      return res.status(400).json({ error: 'Ya existe un proyecto con ese título.' });
-    }
     const idx = json.projects.findIndex(p => p.id === id);
     if (idx === -1) {
       console.log(`PUT /projects/${id} - error: proyecto no encontrado`);
       return res.status(404).json({ error: 'Project not found' });
+    }
+    const prevProject = json.projects[idx];
+    const updatedProject = { id };
+    if (!req.body.title || req.body.title.trim() === "") {
+      console.log(`PUT /projects/${id} - error: título vacío`);
+      return res.status(400).json({ error: 'El título no puede estar vacío.' });
+    }
+    for (const imgKey of ["imagenPrincipal", "image1", "image2"]) {
+      // Solo elimina y sube si hay archivo subido (no si es string/URL)
+      if (req.files && req.files[imgKey]) {
+        try {
+          if (prevProject[imgKey] && typeof prevProject[imgKey] === 'string' && prevProject[imgKey].startsWith('/images/')) {
+            console.log(`[PROJECTS] Intentando eliminar imagen anterior en Bunny: ${id}/${imgKey}.jpg`);
+            const deleted = await deleteFromBunnyStorage(`${id}/${imgKey}.jpg`);
+            if (!deleted) {
+              console.warn(`[PROJECTS] WARNING: No se pudo eliminar la imagen vieja en Bunny: ${id}/${imgKey}.jpg`);
+            } else {
+              console.log(`[PROJECTS] Imagen anterior eliminada correctamente en Bunny: ${id}/${imgKey}.jpg`);
+            }
+          }
+          const buffer = await sharp(req.files[imgKey][0].buffer)
+            .rotate()
+            .jpeg({ quality: 90 })
+            .toBuffer();
+          const uploadSuccess = await uploadToBunnyStorageFromBuffer(buffer, `${id}/${imgKey}.jpg`);
+          if (uploadSuccess) {
+            updatedProject[imgKey] = `/images/${id}/${imgKey}.jpg`;
+            console.log(`[PROJECTS] Imagen modificada subida a Bunny: images/${id}/${imgKey}.jpg`);
+          } else {
+            updatedProject[imgKey] = prevProject[imgKey] || defaultImage;
+            console.log(`[PROJECTS] ERROR: Bunny no subió la imagen, se mantiene la anterior`);
+          }
+        } catch (e) {
+          updatedProject[imgKey] = prevProject[imgKey] || defaultImage;
+          console.log(`PUT /projects/${id} - error guardando imagen ${imgKey}:`, e);
+        }
+      } else if (req.body[imgKey] && typeof req.body[imgKey] === 'string' && req.body[imgKey].startsWith('/images/')) {
+        updatedProject[imgKey] = req.body[imgKey];
+        console.log(`PUT /projects/${id} - no se envió imagen para ${imgKey}, se mantiene la anterior (por URL recibida)`);
+      } else {
+        updatedProject[imgKey] = prevProject[imgKey] || defaultImage;
+        console.log(`PUT /projects/${id} - no se envió imagen para ${imgKey}, se mantiene la anterior`);
+      }
+    }
+    fields.forEach(key => {
+      if (!["imagenPrincipal", "image1", "image2", "id"].includes(key)) {
+        updatedProject[key] = req.body[key] ?? "";
+      }
+    });
+    if (validateUniqueTitle(json.projects, updatedProject.title, id)) {
+      console.log(`PUT /projects/${id} - error: título duplicado`);
+      return res.status(400).json({ error: 'Ya existe un proyecto con ese título.' });
     }
     json.projects[idx] = updatedProject;
     fs.writeFile(projectsPath, JSON.stringify(json, null, 2), err => {
@@ -280,7 +417,7 @@ router.put('/:id', upload.fields([
 });
 
 
-router.delete('/:id', (req, res) => {
+router.delete('/:id', requireToken, (req, res) => {
   const id = req.params.id;
   console.log(`DELETE /projects/${id}`);
   fs.readFile(projectsPath, 'utf8', (err, data) => {
@@ -299,15 +436,6 @@ router.delete('/:id', (req, res) => {
       if (err) {
         console.log(`DELETE /projects/${id} - error escribiendo projects.json:`, err);
         return res.status(500).json({ error: 'Error writing projects.json' });
-      }
-      const dir = path.join(imagesDir, id);
-      if (fs.existsSync(dir)) {
-        try {
-          fs.rmSync(dir, { recursive: true, force: true });
-          console.log(`DELETE /projects/${id} - carpeta de imágenes eliminada: ${dir}`);
-        } catch (e) {
-          console.log(`DELETE /projects/${id} - error eliminando carpeta de imágenes:`, e);
-        }
       }
       fs.readFile(newsPath, 'utf8', (err2, data2) => {
         let validNewsIds = [];
