@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 const sharp = require('sharp');
 const nodeFetch = (...args) => import('node-fetch').then(mod => mod.default(...args));
 const fs = require('fs');
