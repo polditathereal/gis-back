@@ -9,6 +9,12 @@ const cors = require('cors');
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const usersPath = process.env.USERS_PATH || path.join(dataDir, 'users.json');
 
+// Backend URLs (local y producción - Vercel)
+const API_URL_LOCAL = process.env.API_URL_LOCAL || `http://localhost:${process.env.PORT || 4000}`;
+const API_URL_PROD = process.env.API_URL_PROD || 'https://gis-back.vercel.app';
+// Selección del base URL del backend
+const API_BASE_URL = process.env.NODE_ENV === 'production' ? API_URL_PROD : API_URL_LOCAL;
+
 // Helper: leer usuarios
 function readUsers() {
   if (!fs.existsSync(usersPath)) return [];
@@ -93,4 +99,5 @@ router.post('/validate', (req, res) => {
   res.json({ valid: true });
 });
 
-module.exports = { router, requireToken };
+// Exporta también el API_BASE_URL para otros módulos que lo necesiten
+module.exports = { router, requireToken, API_BASE_URL };
