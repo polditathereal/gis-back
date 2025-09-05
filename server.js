@@ -13,8 +13,17 @@ const allowedOrigins = [
   'https://gis-web.vercel.app'
 ];
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function(origin, callback) {
+    // Permite requests sin origen (como curl o postman) o desde los permitidos
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 app.use(express.json());
