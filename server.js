@@ -11,6 +11,8 @@ const imagesDir = process.env.IMAGES_DIR || path.join(dataDir, 'images');
 const allowedOrigins = [
   'http://localhost:3000',
   'https://gis-web.vercel.app',
+  'https://gis-web-fvpn.vercel.app',
+  'https://gis-web-ten.vercel.app' // <-- agrega este dominio
 ];
 app.use((req, res, next) => {
   const origin = req.headers.origin;
