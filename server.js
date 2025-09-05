@@ -41,6 +41,7 @@ app.use('/images', express.static(imagesDir));
 
 app.use('/projects', projectsApi);
 app.use('/news', newsApi);
+app.use('/noticias', newsApi); // <-- agrega esta línea para exponer /noticias
 app.use('/jobs', jobsApi);
 app.use('/users', usersApi.router);
 
