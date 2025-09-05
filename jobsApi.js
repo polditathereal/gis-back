@@ -5,6 +5,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const { requireToken } = require('./usersApi');
 const router = express.Router();
+const cors = require('cors');
 
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const jobsPath = process.env.JOBS_PATH || path.join(dataDir, 'jobs.json');

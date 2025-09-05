@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const router = express.Router();
+const cors = require('cors');
 
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const usersPath = process.env.USERS_PATH || path.join(dataDir, 'users.json');

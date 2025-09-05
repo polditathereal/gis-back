@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const cors = require('cors'); // <--- Agrega esto
 const multer = require('multer');
 const sharp = require('sharp');
 const fs = require('fs');
@@ -17,6 +18,8 @@ const defaultImage = process.env.DEFAULT_IMAGE || '/public/placeholder.svg';
 const BUNNY_STORAGE_API = process.env.BUNNY_STORAGE_API || 'https://br.storage.bunnycdn.com/gis-images';
 const BUNNY_STORAGE_ACCESS_KEY = process.env.BUNNY_STORAGE_ACCESS_KEY || '';
 const BUNNY_STORAGE_READONLY_KEY = process.env.BUNNY_STORAGE_READONLY_KEY || '';
+const BUNNY_CDN_ZONE_URL = process.env.BUNNY_CDN_ZONE_URL || 'https://br.b-cdn.net';
+
 
 function validateUniqueTitle(list, title, excludeId = null) {
   return list.some(item => item.title === title && item.id !== excludeId);
@@ -227,7 +230,9 @@ const upload = multer({ storage });
 router.get('/', (req, res) => {
   fs.readFile(projectsPath, 'utf8', (err, data) => {
     if (err) return res.status(500).json({ error: 'Error reading projects.json' });
-    res.json(JSON.parse(data));
+    const json = JSON.parse(data);
+    // Return raw project data without URL mapping
+    res.json(json);
   });
 });
 
@@ -470,5 +475,8 @@ router.delete('/:id', requireToken, (req, res) => {
     });
   });
 });
+
+
+
 
 module.exports = router;

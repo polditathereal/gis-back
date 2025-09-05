@@ -7,7 +7,16 @@ const PORT = process.env.PORT || 4000;
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const imagesDir = process.env.IMAGES_DIR || path.join(dataDir, 'images');
 
-app.use(cors());
+// Configura CORS globalmente para toda la app
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://gis-web.vercel.app'
+];
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+}));
+
 app.use(express.json());
 
 

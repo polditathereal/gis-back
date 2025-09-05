@@ -8,6 +8,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const { requireToken } = require('./usersApi');
+const cors = require('cors');
 
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const imagesDir = process.env.IMAGES_DIR || path.join(dataDir, 'images');
