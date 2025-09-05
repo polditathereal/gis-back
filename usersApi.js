@@ -5,6 +5,26 @@ const router = express.Router();
 const cors = require('cors');
 const { connectDB } = require('./db');
 
+// Helper: leer usuarios
+async function readUsers() {
+  const db = await connectDB();
+  return await db.collection('users').find({}).toArray();
+}
+// Helper: guardar usuarios
+async function writeUsers(users) {
+  const db = await connectDB();
+  await db.collection('users').deleteMany({});
+  if (users.length > 0) await db.collection('users').insertMany(users);
+}
+// Helper: hash password
+function hashPassword(password) {
+  return crypto.createHash('sha256').update(password).digest('hex');
+}
+// Helper: generar token
+function generateToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
 // Login: recibe username y password, devuelve token
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
