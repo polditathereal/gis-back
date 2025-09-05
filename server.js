@@ -10,7 +10,8 @@ const imagesDir = process.env.IMAGES_DIR || path.join(dataDir, 'images');
 // Configura CORS globalmente para toda la app
 const allowedOrigins = [
   'http://localhost:3000',
-  'https://gis-web.vercel.app'
+  'https://gis-web.vercel.app',
+  'https://gis-web-fvpn.vercel.app'
 ];
 app.use((req, res, next) => {
   const origin = req.headers.origin;
@@ -48,3 +49,14 @@ app.listen(PORT, () => {
   console.log(`Data dir: ${dataDir}`);
   console.log(`Images dir: ${imagesDir}`);
 });
+
+// Si quieres restringir CORS solo a ciertas rutas:
+/*
+const corsRoutes = ['/noticias', '/jobs', '/admin', '/login', '/proyectos'];
+app.use((req, res, next) => {
+  if (corsRoutes.some(route => req.path.startsWith(route))) {
+    // ...CORS logic...
+  }
+  next();
+});
+*/
