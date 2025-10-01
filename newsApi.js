@@ -220,12 +220,11 @@ router.put('/:id', requireToken, upload.single('image'), async (req, res) => {
       console.log(`PUT /news/${id} - error: noticia no encontrada`);
       return res.status(404).json({ error: 'Noticia no encontrada', status: 404 });
     }
-    const updatedNews = req.body;
+    const updatedNews = { ...req.body, id };
     if (!updatedNews.title || updatedNews.title.trim() === "") {
       console.log(`PUT /news/${id} - error: título vacío`);
       return res.status(400).json({ error: 'El título no puede estar vacío.', status: 400 });
     }
-    updatedNews.id = id;
     let imagePath = prevNews.image || defaultImage;
     try {
       if (req.file) {

@@ -351,11 +351,8 @@ router.put(
         return res.status(404).json({ error: 'Project not found' });
       }
       const prevProject = idx;
-      const updatedProject = { id };
-      if (!req.body.title || req.body.title.trim() === "") {
-        console.log(`PUT /projects/${id} - error: título vacío`);
-        return res.status(400).json({ error: 'El título no puede estar vacío.' });
-      }
+      // El id nunca se modifica, se fuerza el id original
+      const updatedProject = { ...req.body, id };
       for (const imgKey of ["imagenPrincipal", "image1", "image2"]) {
         // Solo elimina y sube si hay archivo subido (no si es string/URL)
         if (req.files && req.files[imgKey]) {
