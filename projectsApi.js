@@ -168,6 +168,7 @@ router.get('/', async (req, res) => {
 
 // --- PROJECTS CATEGORIES ---
 router.post('/categories', requireToken, async (req, res) => {
+  console.log('POST /categories - body:', req.body);
   const { name, color } = req.body;
   const validation = validateCategoryInput(req.body);
   if (!validation.valid) {
@@ -183,6 +184,7 @@ router.post('/categories', requireToken, async (req, res) => {
     }
     const newCategory = { id: name, name, color };
     await db.collection('projectCategories').insertOne(newCategory);
+    console.log('POST /categories - categoría creada:', newCategory);
     res.json(newCategory);
   } catch (err) {
     console.error('POST /categories - error guardando en MongoDB:', err);
@@ -191,6 +193,7 @@ router.post('/categories', requireToken, async (req, res) => {
 });
 
 router.put('/categories/:id', requireToken, async (req, res) => {
+  console.log('PUT /categories/:id - body:', req.body);
   const { name, color } = req.body;
   const validation = validateCategoryInput(req.body);
   if (!validation.valid) {
@@ -213,6 +216,7 @@ router.put('/categories/:id', requireToken, async (req, res) => {
       console.error('PUT /categories/:id - error: categoría no encontrada');
       return res.status(404).json({ error: 'Categoría no encontrada.' });
     }
+    console.log('PUT /categories/:id - categoría actualizada:', result.value);
     res.json(result.value);
   } catch (err) {
     console.error('PUT /categories/:id - error actualizando en MongoDB:', err);
@@ -221,6 +225,7 @@ router.put('/categories/:id', requireToken, async (req, res) => {
 });
 
 router.delete('/categories/:id', requireToken, async (req, res) => {
+  console.log('DELETE /categories/:id - id:', req.params.id);
   try {
     const db = await connectDB();
     const result = await db.collection('projectCategories').findOneAndDelete({ id: req.params.id });
@@ -228,6 +233,7 @@ router.delete('/categories/:id', requireToken, async (req, res) => {
       console.error('DELETE /categories/:id - error: categoría no encontrada');
       return res.status(404).json({ error: 'Categoría no encontrada.' });
     }
+    console.log('DELETE /categories/:id - categoría eliminada:', result.value);
     res.json(result.value);
   } catch (err) {
     console.error('DELETE /categories/:id - error eliminando en MongoDB:', err);
@@ -246,6 +252,7 @@ router.post(
   ]),
   async (req, res) => {
     console.log('POST /projects - body:', req.body);
+    console.log('POST /projects - files:', req.files);
     const fields = [
       "title", "tipo", "tema", "entidadContratante", "paisOrigen", "tipo2", "objeto", "fechaInicial", "fechaFinal", "consorcio", "integrantes", "descripcion", "category", "imagenPrincipal", "image1", "image2"
     ];
@@ -330,8 +337,9 @@ router.put(
     { name: 'image2', maxCount: 1 }
   ]),
   async (req, res) => {
+    console.log(`PUT /projects/${req.params.id} - body:`, req.body);
+    console.log(`PUT /projects/${req.params.id} - files:`, req.files);
     const id = req.params.id;
-    console.log(`PUT /projects/${id} - body:`, req.body);
     const fields = [
       "title", "tipo", "tema", "entidadContratante", "paisOrigen", "tipo2", "objeto", "fechaInicial", "fechaFinal", "consorcio", "integrantes", "descripcion", "category", "imagenPrincipal", "image1", "image2"
     ];
@@ -408,13 +416,19 @@ router.put(
 );
 
 router.delete('/:id', requireToken, async (req, res) => {
+  console.log('DELETE /projects/:id - id:', req.params.id);
   try {
     const db = await connectDB();
     const result = await db.collection('projects').findOneAndDelete({ id: req.params.id });
-    if (!result.value) return res.status(404).json({ error: 'Project not found' });
+    if (!result.value) {
+      console.error('DELETE /projects/:id - error: Project not found');
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    console.log('DELETE /projects/:id - proyecto eliminado:', result.value);
     res.json(result.value);
   } catch (err) {
-    res.status(500).json({ error: 'Error eliminando proyecto en MongoDB' });
+    console.error('DELETE /projects/:id - error eliminando en MongoDB:', err);
+    res.status(500).json({ error: 'Error eliminando proyecto en MongoDB', details: err.message });
   }
 });
 
