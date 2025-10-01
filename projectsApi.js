@@ -12,7 +12,6 @@ const nodeFetch = (...args) => import('node-fetch').then(mod => mod.default(...a
 const { connectDB } = require('./db');
 
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
-const imagesDir = process.env.IMAGES_DIR || path.join(dataDir, 'images');
 const defaultImage = process.env.DEFAULT_IMAGE || '/public/placeholder.svg';
 const BUNNY_STORAGE_API = process.env.BUNNY_STORAGE_API || 'https://br.storage.bunnycdn.com/gis-images';
 const BUNNY_STORAGE_ACCESS_KEY = process.env.BUNNY_STORAGE_ACCESS_KEY || '';
@@ -171,36 +170,53 @@ router.get('/', async (req, res) => {
 router.post('/categories', requireToken, async (req, res) => {
   const { name, color } = req.body;
   const validation = validateCategoryInput(req.body);
-  if (!validation.valid) return res.status(400).json({ error: validation.error });
+  if (!validation.valid) {
+    console.error('POST /categories - error:', validation.error);
+    return res.status(400).json({ error: validation.error });
+  }
   try {
     const db = await connectDB();
     const exists = await db.collection('projectCategories').findOne({ name });
-    if (exists) return res.status(400).json({ error: 'Ya existe una categoría con ese nombre.' });
+    if (exists) {
+      console.error('POST /categories - error: categoría duplicada');
+      return res.status(400).json({ error: 'Ya existe una categoría con ese nombre.' });
+    }
     const newCategory = { id: name, name, color };
     await db.collection('projectCategories').insertOne(newCategory);
     res.json(newCategory);
   } catch (err) {
-    res.status(500).json({ error: 'Error guardando categoría en MongoDB' });
+    console.error('POST /categories - error guardando en MongoDB:', err);
+    res.status(500).json({ error: 'Error guardando categoría en MongoDB', details: err.message });
   }
 });
 
 router.put('/categories/:id', requireToken, async (req, res) => {
   const { name, color } = req.body;
   const validation = validateCategoryInput(req.body);
-  if (!validation.valid) return res.status(400).json({ error: validation.error });
+  if (!validation.valid) {
+    console.error('PUT /categories/:id - error:', validation.error);
+    return res.status(400).json({ error: validation.error });
+  }
   try {
     const db = await connectDB();
     const exists = await db.collection('projectCategories').findOne({ name, id: { $ne: req.params.id } });
-    if (exists) return res.status(400).json({ error: 'Ya existe una categoría con ese nombre.' });
+    if (exists) {
+      console.error('PUT /categories/:id - error: categoría duplicada');
+      return res.status(400).json({ error: 'Ya existe una categoría con ese nombre.' });
+    }
     const result = await db.collection('projectCategories').findOneAndUpdate(
       { id: req.params.id },
       { $set: { id: name, name, color } },
       { returnDocument: 'after' }
     );
-    if (!result.value) return res.status(404).json({ error: 'Categoría no encontrada.' });
+    if (!result.value) {
+      console.error('PUT /categories/:id - error: categoría no encontrada');
+      return res.status(404).json({ error: 'Categoría no encontrada.' });
+    }
     res.json(result.value);
   } catch (err) {
-    res.status(500).json({ error: 'Error actualizando categoría en MongoDB' });
+    console.error('PUT /categories/:id - error actualizando en MongoDB:', err);
+    res.status(500).json({ error: 'Error actualizando categoría en MongoDB', details: err.message });
   }
 });
 
@@ -208,10 +224,14 @@ router.delete('/categories/:id', requireToken, async (req, res) => {
   try {
     const db = await connectDB();
     const result = await db.collection('projectCategories').findOneAndDelete({ id: req.params.id });
-    if (!result.value) return res.status(404).json({ error: 'Categoría no encontrada.' });
+    if (!result.value) {
+      console.error('DELETE /categories/:id - error: categoría no encontrada');
+      return res.status(404).json({ error: 'Categoría no encontrada.' });
+    }
     res.json(result.value);
   } catch (err) {
-    res.status(500).json({ error: 'Error eliminando categoría en MongoDB' });
+    console.error('DELETE /categories/:id - error eliminando en MongoDB:', err);
+    res.status(500).json({ error: 'Error eliminando categoría en MongoDB', details: err.message });
   }
 });
 
@@ -248,7 +268,7 @@ router.post(
           .rotate()
           .jpeg({ quality: 90 })
           .toBuffer();
-        newProject['imagenPrincipal'] = `/images/${newProject.id}/imagenPrincipal.jpg`;
+        newProject['imagenPrincipal'] = `${BUNNY_CDN_ZONE_URL}/images/${newProject.id}/imagenPrincipal.jpg`;
         // Subir a Bunny Storage
         await uploadToBunnyStorageFromBuffer(buffer, `${newProject.id}/imagenPrincipal.jpg`);
         console.log(`[PROJECTS] Imagen principal subida a Bunny: images/${newProject.id}/imagenPrincipal.jpg`);
@@ -264,7 +284,7 @@ router.post(
               .rotate()
               .jpeg({ quality: 90 })
               .toBuffer();
-            newProject[imgKey] = `/images/${newProject.id}/${imgKey}.jpg`;
+            newProject[imgKey] = `${BUNNY_CDN_ZONE_URL}/images/${newProject.id}/${imgKey}.jpg`;
             await uploadToBunnyStorageFromBuffer(buffer, `${newProject.id}/${imgKey}.jpg`);
             console.log(`[PROJECTS] Imagen secundaria subida a Bunny: images/${newProject.id}/${imgKey}.jpg`);
           } catch (e) {
@@ -332,7 +352,7 @@ router.put(
         // Solo elimina y sube si hay archivo subido (no si es string/URL)
         if (req.files && req.files[imgKey]) {
           try {
-            if (prevProject[imgKey] && typeof prevProject[imgKey] === 'string' && prevProject[imgKey].startsWith('/images/')) {
+            if (prevProject[imgKey] && typeof prevProject[imgKey] === 'string' && prevProject[imgKey].includes('/images/')) {
               console.log(`[PROJECTS] Intentando eliminar imagen anterior en Bunny: ${id}/${imgKey}.jpg`);
               const deleted = await deleteFromBunnyStorage(`${id}/${imgKey}.jpg`);
               if (!deleted) {
@@ -347,7 +367,7 @@ router.put(
               .toBuffer();
             const uploadSuccess = await uploadToBunnyStorageFromBuffer(buffer, `${id}/${imgKey}.jpg`);
             if (uploadSuccess) {
-              updatedProject[imgKey] = `/images/${id}/${imgKey}.jpg`;
+              updatedProject[imgKey] = `${BUNNY_CDN_ZONE_URL}/images/${id}/${imgKey}.jpg`;
               console.log(`[PROJECTS] Imagen modificada subida a Bunny: images/${id}/${imgKey}.jpg`);
             } else {
               updatedProject[imgKey] = prevProject[imgKey] || defaultImage;
@@ -357,8 +377,8 @@ router.put(
             updatedProject[imgKey] = prevProject[imgKey] || defaultImage;
             console.log(`PUT /projects/${id} - error guardando imagen ${imgKey}:`, e);
           }
-        } else if (req.body[imgKey] && typeof req.body[imgKey] === 'string' && req.body[imgKey].startsWith('/images/')) {
-          updatedProject[imgKey] = req.body[imgKey];
+        } else if (req.body[imgKey] && typeof req.body[imgKey] === 'string' && req.body[imgKey].includes('/images/')) {
+          updatedProject[imgKey] = req.body[imgKey].startsWith('http') ? req.body[imgKey] : `${BUNNY_CDN_ZONE_URL}${req.body[imgKey]}`;
           console.log(`PUT /projects/${id} - no se envió imagen para ${imgKey}, se mantiene la anterior (por URL recibida)`);
         } else {
           updatedProject[imgKey] = prevProject[imgKey] || defaultImage;
