@@ -398,7 +398,9 @@ router.put(
           updatedProject[key] = req.body[key] ?? "";
         }
       });
-      if (validateUniqueTitle(json.projects, updatedProject.title, id)) {
+      // Validación de título duplicado usando MongoDB
+      const duplicate = await db.collection('projects').findOne({ title: updatedProject.title, id: { $ne: id } });
+      if (duplicate) {
         console.log(`PUT /projects/${id} - error: título duplicado`);
         return res.status(400).json({ error: 'Ya existe un proyecto con ese título.' });
       }
