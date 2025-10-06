@@ -12,7 +12,8 @@ const allowedOrigins = [
   'http://localhost:3000',
   'https://gis-web.vercel.app',
   'https://gis-web-fvpn.vercel.app',
-  'https://gis-web-ten.vercel.app' // <-- agrega este dominio
+  'https://gis-web-ten.vercel.app',
+  'https://www.grupogiscolombia.com'
 ];
 app.use((req, res, next) => {
   const origin = req.headers.origin;
