@@ -19,13 +19,20 @@ const allowedOrigins = [
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   console.log('[CORS] Middleware ejecutado para origen:', origin);
+  console.log('[CORS] Allowed origins:', allowedOrigins);
+  console.log('[CORS] Origin included?', allowedOrigins.includes(origin));
+  
   if (allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Vary', 'Origin');
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    console.log('[CORS] Headers set for origin:', origin);
+  } else {
+    console.log('[CORS] Origin not allowed:', origin);
   }
+  
   if (req.method === 'OPTIONS') {
     return res.sendStatus(204);
   }
