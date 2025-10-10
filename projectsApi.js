@@ -136,6 +136,29 @@ async function purgeBunnyCDN(remotePath) {
   }
 }
 
+// Proxy para servir imágenes desde Bunny CDN
+router.get('/image/:projectId/:imageName', async (req, res) => {
+  const { projectId, imageName } = req.params;
+  const imageUrl = `${BUNNY_CDN_ZONE_URL}/images/${projectId}/${imageName}`;
+  
+  try {
+    const response = await nodeFetch(imageUrl);
+    if (!response.ok) {
+      return res.status(404).send('Image not found');
+    }
+    
+    res.set({
+      'Content-Type': response.headers.get('content-type'),
+      'Cache-Control': 'public, max-age=31536000',
+    });
+    
+    response.body.pipe(res);
+  } catch (err) {
+    console.error('Error proxying image:', err);
+    res.status(500).send('Error loading image');
+  }
+});
+
 // Obtener las URLs de las imágenes de un proyecto desde MongoDB
 router.get('/:id/images', async (req, res) => {
   const id = req.params.id;
@@ -275,7 +298,7 @@ router.post(
           .rotate()
           .jpeg({ quality: 90 })
           .toBuffer();
-        newProject['imagenPrincipal'] = `${BUNNY_CDN_ZONE_URL}/images/${newProject.id}/imagenPrincipal.jpg`;
+        newProject['imagenPrincipal'] = `/images/${newProject.id}/imagenPrincipal.jpg`;
         // Subir a Bunny Storage
         await uploadToBunnyStorageFromBuffer(buffer, `${newProject.id}/imagenPrincipal.jpg`);
         console.log(`[PROJECTS] Imagen principal subida a Bunny: images/${newProject.id}/imagenPrincipal.jpg`);
@@ -291,7 +314,7 @@ router.post(
               .rotate()
               .jpeg({ quality: 90 })
               .toBuffer();
-            newProject[imgKey] = `${BUNNY_CDN_ZONE_URL}/images/${newProject.id}/${imgKey}.jpg`;
+            newProject[imgKey] = `/images/${newProject.id}/${imgKey}.jpg`;
             await uploadToBunnyStorageFromBuffer(buffer, `${newProject.id}/${imgKey}.jpg`);
             console.log(`[PROJECTS] Imagen secundaria subida a Bunny: images/${newProject.id}/${imgKey}.jpg`);
           } catch (e) {
@@ -351,12 +374,14 @@ router.put(
         return res.status(404).json({ error: 'Project not found' });
       }
       const prevProject = idx;
-      // El id nunca se modifica, se fuerza el id original
-      const updatedProject = { ...req.body, id };
+      // El id nunca se modifica, se fuerza el id original. Excluimos _id para evitar errores de MongoDB
+      const { _id, ...bodyWithoutId } = req.body;
+      const updatedProject = { ...bodyWithoutId, id };
       for (const imgKey of ["imagenPrincipal", "image1", "image2"]) {
-        // Solo elimina y sube si hay archivo subido (no si es string/URL)
+        // Solo procesa las imágenes si se subió un archivo nuevo
         if (req.files && req.files[imgKey]) {
           try {
+            // Eliminar imagen anterior solo si existe
             if (prevProject[imgKey] && typeof prevProject[imgKey] === 'string' && prevProject[imgKey].includes('/images/')) {
               console.log(`[PROJECTS] Intentando eliminar imagen anterior en Bunny: ${id}/${imgKey}.jpg`);
               const deleted = await deleteFromBunnyStorage(`${id}/${imgKey}.jpg`);
@@ -366,14 +391,15 @@ router.put(
                 console.log(`[PROJECTS] Imagen anterior eliminada correctamente en Bunny: ${id}/${imgKey}.jpg`);
               }
             }
+            // Subir nueva imagen
             const buffer = await sharp(req.files[imgKey][0].buffer)
               .rotate()
               .jpeg({ quality: 90 })
               .toBuffer();
             const uploadSuccess = await uploadToBunnyStorageFromBuffer(buffer, `${id}/${imgKey}.jpg`);
             if (uploadSuccess) {
-              updatedProject[imgKey] = `${BUNNY_CDN_ZONE_URL}/images/${id}/${imgKey}.jpg`;
-              console.log(`[PROJECTS] Imagen modificada subida a Bunny: images/${id}/${imgKey}.jpg`);
+              updatedProject[imgKey] = `/images/${id}/${imgKey}.jpg`;
+              console.log(`[PROJECTS] Nueva imagen subida a Bunny: images/${id}/${imgKey}.jpg`);
             } else {
               updatedProject[imgKey] = prevProject[imgKey] || defaultImage;
               console.log(`[PROJECTS] ERROR: Bunny no subió la imagen, se mantiene la anterior`);
@@ -382,12 +408,10 @@ router.put(
             updatedProject[imgKey] = prevProject[imgKey] || defaultImage;
             console.log(`PUT /projects/${id} - error guardando imagen ${imgKey}:`, e);
           }
-        } else if (req.body[imgKey] && typeof req.body[imgKey] === 'string' && req.body[imgKey].includes('/images/')) {
-          updatedProject[imgKey] = req.body[imgKey].startsWith('http') ? req.body[imgKey] : `${BUNNY_CDN_ZONE_URL}${req.body[imgKey]}`;
-          console.log(`PUT /projects/${id} - no se envió imagen para ${imgKey}, se mantiene la anterior (por URL recibida)`);
         } else {
-          updatedProject[imgKey] = prevProject[imgKey] || defaultImage;
-          console.log(`PUT /projects/${id} - no se envió imagen para ${imgKey}, se mantiene la anterior`);
+          // Si no se subió archivo, mantener la imagen anterior sin modificar
+          updatedProject[imgKey] = prevProject[imgKey];
+          console.log(`PUT /projects/${id} - no se subió archivo para ${imgKey}, se mantiene imagen anterior sin cambios`);
         }
       }
       fields.forEach(key => {
@@ -406,10 +430,12 @@ router.put(
         { $set: updatedProject },
         { returnDocument: 'after' }
       );
-      if (!result.value) return res.status(404).json({ error: 'Project not found' });
-      res.json(result.value);
+      const updatedDoc = result.value || result;
+      if (!updatedDoc) return res.status(404).json({ error: 'Project not found' });
+      res.json(updatedDoc);
     } catch (err) {
-      res.status(500).json({ error: 'Error actualizando proyecto en MongoDB' });
+      console.error('PUT /projects/:id - error actualizando en MongoDB:', err);
+      res.status(500).json({ error: 'Error actualizando proyecto en MongoDB', details: err.message });
     }
   }
 );
